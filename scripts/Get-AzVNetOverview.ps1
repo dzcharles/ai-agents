@@ -9,6 +9,7 @@
     Enumerates the virtual networks in the specified subscriptions (or in every enabled
     subscription visible to the signed-in account) and emits one object per virtual network
     describing its address space, subnets, DNS servers, peerings, DDoS protection state and tags.
+    Objects are streamed to the pipeline as they are produced.
 
     With -IncludeSubnetDetail the function also emits one additional object per subnet, containing
     the subnet prefixes, the associated network security group and route table, service delegations,
@@ -68,7 +69,7 @@ param(
 begin {
     Set-StrictMode -Version Latest
 
-    function Test-AzConnection {
+    function Get-CurrentAzContext {
         [CmdletBinding()]
         [OutputType([Microsoft.Azure.Commands.Profile.Models.Core.PSAzureContext])]
         param()
@@ -77,11 +78,23 @@ begin {
             $context = Get-AzContext -ErrorAction Stop
         }
         catch {
-            throw "Unable to read the current Az context: $($_.Exception.Message)"
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                [System.Exception]::new("Unable to read the current Az context: $($_.Exception.Message)", $_.Exception),
+                'AzContextReadFailed',
+                [System.Management.Automation.ErrorCategory]::ConnectionError,
+                $null
+            )
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
         }
 
         if (-not $context -or -not $context.Account) {
-            throw 'No authenticated Azure context was found. Run Connect-AzAccount and try again.'
+            $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                [System.Exception]::new('No authenticated Azure context was found. Run Connect-AzAccount and try again.'),
+                'AzContextNotFound',
+                [System.Management.Automation.ErrorCategory]::AuthenticationError,
+                $null
+            )
+            $PSCmdlet.ThrowTerminatingError($errorRecord)
         }
 
         return $context
@@ -110,7 +123,13 @@ begin {
                     Where-Object { $_.State -eq 'Enabled' }
             }
             catch {
-                throw "Unable to enumerate subscriptions: $($_.Exception.Message)"
+                $errorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    [System.Exception]::new("Unable to enumerate subscriptions: $($_.Exception.Message)", $_.Exception),
+                    'SubscriptionEnumerationFailed',
+                    [System.Management.Automation.ErrorCategory]::ResourceUnavailable,
+                    $null
+                )
+                $PSCmdlet.ThrowTerminatingError($errorRecord)
             }
         }
 
@@ -164,19 +183,19 @@ begin {
         }
 
         [pscustomobject]@{
-            RowType              = 'VNet'
-            Subscription         = $SubscriptionName
-            ResourceGroup        = $VirtualNetwork.ResourceGroupName
-            VNetName             = $VirtualNetwork.Name
-            Location             = $VirtualNetwork.Location
-            AddressSpace         = ($VirtualNetwork.AddressSpace.AddressPrefixes -join ', ')
-            SubnetCount          = @($VirtualNetwork.Subnets).Count
-            DnsServers           = ($VirtualNetwork.DhcpOptions.DnsServers -join ', ')
-            PeeringCount         = $peerings.Count
-            Peerings             = $peeringText
+            RowType               = 'VNet'
+            Subscription          = $SubscriptionName
+            ResourceGroup         = $VirtualNetwork.ResourceGroupName
+            VNetName              = $VirtualNetwork.Name
+            Location              = $VirtualNetwork.Location
+            AddressSpace          = ($VirtualNetwork.AddressSpace.AddressPrefixes -join ', ')
+            SubnetCount           = @($VirtualNetwork.Subnets).Count
+            DnsServers            = ($VirtualNetwork.DhcpOptions.DnsServers -join ', ')
+            PeeringCount          = $peerings.Count
+            Peerings              = $peeringText
             DdosProtectionEnabled = $ddosEnabled
-            Tags                 = ConvertTo-TagString -Tag $VirtualNetwork.Tag
-            ResourceId           = $VirtualNetwork.Id
+            Tags                  = ConvertTo-TagString -Tag $VirtualNetwork.Tag
+            ResourceId            = $VirtualNetwork.Id
         }
     }
 
@@ -205,24 +224,26 @@ begin {
         }
 
         [pscustomobject]@{
-            RowType                            = 'Subnet'
-            Subscription                       = $SubscriptionName
-            ResourceGroup                      = $VirtualNetwork.ResourceGroupName
-            VNetName                           = $VirtualNetwork.Name
-            Location                           = $VirtualNetwork.Location
-            SubnetName                         = $Subnet.Name
-            SubnetPrefix                       = $prefixes
-            NetworkSecurityGroup               = Get-ResourceNameFromId -ResourceId $Subnet.NetworkSecurityGroup.Id
-            RouteTable                         = Get-ResourceNameFromId -ResourceId $Subnet.RouteTable.Id
-            Delegations                        = $delegations
-            PrivateEndpointNetworkPolicies     = [string]$Subnet.PrivateEndpointNetworkPolicies
-            PrivateLinkServiceNetworkPolicies  = [string]$Subnet.PrivateLinkServiceNetworkPolicies
-            ConnectedDeviceCount               = @($Subnet.IpConfigurations).Count
-            ResourceId                         = $Subnet.Id
+            RowType                           = 'Subnet'
+            Subscription                      = $SubscriptionName
+            ResourceGroup                     = $VirtualNetwork.ResourceGroupName
+            VNetName                          = $VirtualNetwork.Name
+            Location                          = $VirtualNetwork.Location
+            SubnetName                        = $Subnet.Name
+            SubnetPrefix                      = $prefixes
+            NetworkSecurityGroup              = Get-ResourceNameFromId -ResourceId $Subnet.NetworkSecurityGroup.Id
+            RouteTable                        = Get-ResourceNameFromId -ResourceId $Subnet.RouteTable.Id
+            Delegations                       = $delegations
+            PrivateEndpointNetworkPolicies    = [string]$Subnet.PrivateEndpointNetworkPolicies
+            PrivateLinkServiceNetworkPolicies = [string]$Subnet.PrivateLinkServiceNetworkPolicies
+            ConnectedDeviceCount              = @($Subnet.IpConfigurations).Count
+            ResourceId                        = $Subnet.Id
         }
     }
 
-    $originalContext = Test-AzConnection
+    $originalContext = Get-CurrentAzContext
+
+    # Only buffered when -CsvPath is used; otherwise objects stream straight to the pipeline.
     $results = [System.Collections.Generic.List[pscustomobject]]::new()
 }
 
@@ -249,11 +270,15 @@ process {
 
             foreach ($vnet in $vnets) {
                 try {
-                    $results.Add((ConvertTo-VNetSummary -VirtualNetwork $vnet -SubscriptionName $subscription.Name))
+                    $vnetRow = ConvertTo-VNetSummary -VirtualNetwork $vnet -SubscriptionName $subscription.Name
+                    if ($CsvPath) { $results.Add($vnetRow) }
+                    Write-Output $vnetRow
 
-                    if ($IncludeSubnetDetail) {
+                    if ($IncludeSubnetDetail.IsPresent) {
                         foreach ($subnet in @($vnet.Subnets)) {
-                            $results.Add((ConvertTo-SubnetDetail -VirtualNetwork $vnet -Subnet $subnet -SubscriptionName $subscription.Name))
+                            $subnetRow = ConvertTo-SubnetDetail -VirtualNetwork $vnet -Subnet $subnet -SubscriptionName $subscription.Name
+                            if ($CsvPath) { $results.Add($subnetRow) }
+                            Write-Output $subnetRow
                         }
                     }
                 }
@@ -290,6 +315,4 @@ end {
             Write-Warning "Failed to export results to '$CsvPath': $($_.Exception.Message)"
         }
     }
-
-    $results
 }

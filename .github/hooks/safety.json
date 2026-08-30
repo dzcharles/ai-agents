@@ -3,7 +3,7 @@
     "PreToolUse": [
       {
         "type": "command",
-        "command": "./scripts/block-dangerous.sh",
+        "command": "./.github/scripts/block-dangerous.sh",
         "timeout": 5
       }
     ]

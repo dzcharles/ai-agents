@@ -3,7 +3,7 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "./scripts/inject-request-context.sh",
+        "command": "./.github/scripts/inject-request-context.sh",
         "timeout": 5
       }
     ]

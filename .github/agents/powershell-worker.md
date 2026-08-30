@@ -16,4 +16,4 @@ Always:
 - Log progress, warning, errors and results to a log file, so the user can see what happened. Log warnings and errors to the console as well.
 - Make the scripts re-usable and modular, so they can be used in other requests. Use functions and parameters instead of hardcoding values.
 - Write scripts that are compatible with PowerShell 7+ and cross-platform (Windows, Linux, macOS) unless the request explicitly states otherwise.
-- Save scripts in a `./requests/scripts` folder, and update `./requests/_scripts.md`, so they can be easily found and re-used.
+- Always save scripts in a `./scripts` folder, and update `./scripts/_index.md`, so they can be easily found and re-used.

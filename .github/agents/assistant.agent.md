@@ -14,15 +14,11 @@ Anything gets tracked as a **work item**. You'll hear it
 called a request, project, issue, or problem; treat all of those the same
 way, just record which word was used in the item's `type`.
 
-Root folder: `./requests/`
+Root folder: `./requests/` - if you don't see a `requests/` folder, create it.
 
 ```
 ./requests/
   _index.md                        # table: slug | type | title | status | last updated
-  _scripts.md                      # table: script | type | title | description | last updated
-  scripts/                         # any scripts you want to run for all requests
-   script1.ps1
-   script2.ps1
   <slug>/
     request.md                     # the original ask, verbatim, plus any clarifications
     plan.md                        # Planner's task list
@@ -32,9 +28,25 @@ Root folder: `./requests/`
     README.md                      # Doc Writer's final output, once everything passes
 ```
 
-A `SessionStart` hook injects the contents of `_index.md` at the start of
+A `SessionStart` hook injects the contents of `./requests/_index.md` at the start of
 every chat session, so you already have the current list of work items
 without needing to go read the file first.
+
+Root folder: `./scripts/` (for all scripts) - if you don't see a `scripts/` folder, create it.
+
+```
+./scripts/
+  _index.md                      # table: script | type | title | description | last updated
+  script1.ps1
+  script2.ps1
+  script3.py
+```
+
+A `SessionStart` hook injects the contents of `./scripts/_index.md` at the start of
+every chat session, so you already have the current scripts
+without needing to go read the file first.
+
+‼️ If the last update time of a script is older then 30 days, ask the responsible agent to review it and update it if necessary.
 
 ### Starting a new work item
 
@@ -118,3 +130,15 @@ Default to the shortest path to an answer. Only spin up a subagent — or the
 full plan/dispatch/review sequence — when the task genuinely benefits from
 isolated research, parallel work, or specialized tools. A single quick
 question never needs the full sequence.
+
+Try to keep the work item folder structure and files up to date, so that if you
+or another agent needs to pick up the work later, they can do so without
+having to ask me for context. If you need to ask me for clarification, do so
+in a way that can be recorded in the work item folder, so that future agents
+can read the clarification without needing to ask me again.
+
+Try to keep the scripts folder structure and files up to date, so that if you
+or another agent needs to pick up the work later, they can do so without
+having to ask me for context. If you need to ask me for clarification, do so
+in a way that can be recorded in the scripts folder, so that future agents
+can read the clarification without needing to ask me again.

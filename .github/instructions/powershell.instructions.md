@@ -146,6 +146,12 @@ function Set-ResourceConfiguration {
   - Return modified/created object with `-PassThru`
   - Use verbose/warning for status updates
 
+- **Export Pattern:**
+  - Use `-CsvPath` or `-JsonPath` for file export
+  - Validate file path and permissions
+  - Use `Export-Csv` or `ConvertTo-Json` for structured output
+  - Document export behavior and format
+
 ### Example - Pipeline and Output
 
 ```powershell

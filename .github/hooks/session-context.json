@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "./scripts/inject-request-context.sh",
+        "timeout": 5
+      }
+    ]
+  }
+}

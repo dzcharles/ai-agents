@@ -5,7 +5,8 @@
 # request directory - no sync needed
 requests/
 requests/**
-scripts/logs/*.log
+
+*.log
 
 ### Linux ###
 *~

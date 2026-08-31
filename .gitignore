@@ -8,6 +8,9 @@ requests/**
 
 *.log
 
+azure-iac/
+azure-iac/**
+
 ### Linux ###
 *~
 

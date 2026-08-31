@@ -2,7 +2,7 @@
 name: Bicep Worker
 description: Writes and tests Bicep files.
 user-invocable: false
-tools: [read, edit]
+tools: [read, edit,'microsoft-docs/*']
 ---
 
 You write Bicep files for any infrastructure as code (IaC) requests.

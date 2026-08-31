@@ -2,7 +2,7 @@
 name: Reviewer
 description: Checks whether produced artifacts actually fulfill the original request.
 user-invocable: false
-tools: ['read', 'search']
+tools: [read, search, 'microsoft-docs/*']
 ---
 Compare the artifacts against the original request and the plan. 
 

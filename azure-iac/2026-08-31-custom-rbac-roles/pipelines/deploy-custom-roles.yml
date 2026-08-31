@@ -1,30 +1,3 @@
----
-name: Azure Pipeline Worker
-description: Writes and tests Azure DevOpsPipeline files.
-user-invocable: false
-tools: [read, edit, 'microsoft-docs/*','kql-search/*']
----
-
-You are responsible for creating, updating and testing Azure DevOps Pipeline files. You will be given a set of requirements and you will need to create or update the pipeline file accordingly. You will also need to test the pipeline to ensure it works as expected.
-
-Always:
- - Use the latest version of the Azure DevOps Pipeline schema.
- - Use the correct syntax for the pipeline file, including indentation and formatting.
- - Never use hardcoded values in the pipeline file, always use variables or parameters instead.
- - Use gates and approvals where necessary to ensure that the pipeline is secure and reliable.
-
-# Deploying infrastructure (bicep files)
-When deploying infrastructure using Azure DevOps Pipelines, you should follow these best practices:
- - Understand the bicep templates and parameters that are being used to deploy the infrastructure.
- - Deploy the infrastructure as a deployment stack and use the `dependsOn` property to ensure that resources are deployed in the correct order.
- - Always work in different stages:
-    - **Lint Stage**: Build and validate the bicep templates  (using the `bicep build` command).
-    - **Validate Stage**: Validate the bicep templates and parameters, and build the infrastructure artifacts.
-    - **What If Stage**: Run what-if tests to ensure that the infrastructure can be deployed correctly and meets the requirements (output the what-if results and for the deployment stack also delete the stack after the what-if test).
-    - **Deploy Stage**: Deploy the infrastructure to the target environment, using gates and approvals as necessary.
-
-## Example Pipeline File
-```yaml
 trigger: none
 
 pr:
@@ -34,24 +7,35 @@ pr:
       - main
   paths:
     include:
-      - iac/modules/*/*.bicep
-      - iac/parameters/*/*.bicep
+      - azure-iac/2026-08-31-custom-rbac-roles/modules/*.bicep
+      - azure-iac/2026-08-31-custom-rbac-roles/parameters/*.bicepparam
     exclude:
-      - iac/docs/**
+      - azure-iac/2026-08-31-custom-rbac-roles/docs/**
+
+parameters:
+  - name: azureServiceConnection
+    displayName: 'ARM service connection name (workload identity federation, no stored secrets)'
+    type: string
+  - name: subscriptionId
+    displayName: 'Target subscription ID'
+    type: string
+  - name: location
+    displayName: 'Deployment location'
+    type: string
+    default: 'westeurope'
 
 variables:
   - name: templateFile
-    value: 'iac/main.bicep'
+    value: 'azure-iac/2026-08-31-custom-rbac-roles/modules/customRoles.bicep'
   - name: parameterFile
-    value: 'iac/parameters/awe-prd-log-01.bicepparam'
+    value: 'azure-iac/2026-08-31-custom-rbac-roles/parameters/customRoles.bicepparam'
   - name: deploymentStackName
-    value: 'DeoployCentralLoggingSolution'
+    value: 'DeployCustomRbacRoles'
   - name: poolName
     value: 'ubuntu-latest'
 
 pool:
   vmImage: $(poolName)
-
 
 stages:
 - stage: BicepLintChecks
@@ -64,7 +48,7 @@ stages:
         - task: AzureCLI@2
           displayName: Build template file for lint check
           inputs:
-            azureSubscription: $(azureServiceConnection)
+            azureSubscription: ${{ parameters.azureServiceConnection }}
             scriptType: pscore
             scriptLocation: inlineScript
             inlineScript: |
@@ -81,18 +65,18 @@ stages:
         - task: AzureCLI@2
           displayName: Validate deployment (RBAC/preflight)
           inputs:
-            azureSubscription: $(azureServiceConnection)
+            azureSubscription: ${{ parameters.azureServiceConnection }}
             scriptType: pscore
             scriptLocation: inlineScript
             inlineScript: |
               #Update to latest az cli version to support stack commands
               az upgrade --yes
-              
+
               $azArgs = @(
                 'stack', 'sub', 'validate',
                 '--name', '$(deploymentStackName)',
-                '--subscription', '$(subscriptionId)',
-                '--location', '$(location)',
+                '--subscription', '${{ parameters.subscriptionId }}',
+                '--location', '${{ parameters.location }}',
                 '--template-file', '$(templateFile)',
                 '--parameters', '$(parameterFile)',
                 '--deny-settings-mode', 'DenyDelete',
@@ -106,7 +90,7 @@ stages:
                   Write-Error "Validation failed"
                   exit 1
               }
-                
+
 - stage: WhatIfDeployment
   displayName: What-If Bicep Deployment
   dependsOn: ValidateDeployment
@@ -118,7 +102,7 @@ stages:
         - task: AzureCLI@2
           displayName: What-if deployment
           inputs:
-            azureSubscription: $(azureServiceConnection)
+            azureSubscription: ${{ parameters.azureServiceConnection }}
             scriptType: pscore
             scriptLocation: inlineScript
             inlineScript: |
@@ -128,27 +112,47 @@ stages:
               # Print az version to verify the upgrade
               az version
 
-                $azArgs = @(
+              $azArgs = @(
                 'stack-whatif', 'sub', 'create',
-                '--location', '$(location)',
-                '--subscription', '$(subscriptionId)',
+                '--location', '${{ parameters.location }}',
+                '--subscription', '${{ parameters.subscriptionId }}',
                 '--template-file', '$(templateFile)',
                 '--parameters', '$(parameterFile)',
                 '--validation-level', 'ProviderNoRbac'
-                )
-                az @azArgs
+              )
+              az @azArgs
 
-                # Check if the last command was successful - pscore does not throw an error on failure, so we need to check the exit code
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Error "What-if failed"
-                    exit 1
-                }
+              # Check if the last command was successful - pscore does not throw an error on failure, so we need to check the exit code
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Error "What-if failed"
+                  exit 1
+              }
+        - task: AzureCLI@2
+          displayName: Delete what-if stack (custom role definitions are low-volume/high-impact, avoid lingering stacks)
+          inputs:
+            azureSubscription: ${{ parameters.azureServiceConnection }}
+            scriptType: pscore
+            scriptLocation: inlineScript
+            inlineScript: |
+              $azArgs = @(
+                'stack', 'sub', 'delete',
+                '--name', '$(deploymentStackName)',
+                '--subscription', '${{ parameters.subscriptionId }}',
+                '--yes',
+                '--action-on-unmanage', 'deleteAll'
+              )
+              az @azArgs
 
+              # Check if the last command was successful - pscore does not throw an error on failure, so we need to check the exit code
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Error "Deletion of what-if stack failed"
+                  exit 1
+              }
 
 - stage: DeployBicep
   displayName: Deploy Bicep
   dependsOn: WhatIfDeployment
-  condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   jobs:
     - deployment: DeployBicepJob
       displayName: Run Bicep Deployment
@@ -161,7 +165,7 @@ stages:
               - task: AzureCLI@2
                 displayName: Deploy Bicep
                 inputs:
-                  azureSubscription: $(azureServiceConnection)
+                  azureSubscription: ${{ parameters.azureServiceConnection }}
                   scriptType: pscore
                   scriptLocation: inlineScript
                   inlineScript: |
@@ -174,8 +178,8 @@ stages:
                     $azArgs = @(
                       'stack', 'sub', 'create',
                       '--name', '$(deploymentStackName)',
-                      '--subscription', '$(subscriptionId)',
-                      '--location', '$(location)',
+                      '--subscription', '${{ parameters.subscriptionId }}',
+                      '--location', '${{ parameters.location }}',
                       '--template-file', '$(templateFile)',
                       '--parameters', '$(parameterFile)',
                       '--deny-settings-mode', 'DenyDelete',
@@ -188,4 +192,3 @@ stages:
                         Write-Error "Deployment failed"
                         exit 1
                     }
-```

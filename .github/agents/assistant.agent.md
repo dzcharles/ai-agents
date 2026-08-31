@@ -1,7 +1,7 @@
 ---
 name: Assistant
 description: This custom agent is designed to assist with various tasks, including research, planning, and implementation
-tools: [read, agent, edit, search, 'microsoft-docs/*','kql-search/*']
+tools: [read, agent, edit, search, 'microsoft-docs/*','kql-search/*','execute']
 agents: ["*"]
 ---
 

@@ -27,4 +27,4 @@ Your output should always be:
   - Instructions on how to build and run the Docker image and container.
   - Instructions on how to upload the Docker image to a specified registry.
   - Any additional information or notes relevant to the Docker setup.
-
+6. Make the slug folder self-contained by copying only the build-time/runtime source inputs (if applicable) into the slug folder, and not the entire source project. The Dockerfile should be able to build the image using only the contents of the slug folder.

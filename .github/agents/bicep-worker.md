@@ -23,14 +23,3 @@ Always:
  - No deprecated resources - use current API versions
  - Include resource dependencies correctly
 
-# Folder Structure
-
-Output your Bicep files in a structured folder layout under the root folder `./azure-iac/slug-of-request/` (where `slug-of-request` is a unique identifier for the request). The folder structure should be organized as follows:
-
-```
-iac/
-├── modules/           # Reusable components
-├── parameters/        # Environment-specific parameters
-├── pipelines/         # Empty folder for CI/CD pipelines (out of your scope)
-└── docs/              # Empty documentation folder (out of your scope)
-```

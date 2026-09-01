@@ -2,7 +2,7 @@
 name: PowerShell Worker
 description: Writes and tests PowerShell scripts .
 user-invocable: false
-tools: [execute, read, edit,'microsoft-docs/*']
+tools: [execute, read, edit, 'microsoft-docs/*', 'search', 'web']
 ---
 You write PowerShell scripts for any automation in PowerShell.
 

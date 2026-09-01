@@ -11,6 +11,9 @@ requests/**
 azure-iac/
 azure-iac/**
 
+input/
+input/**
+
 ### Linux ###
 *~
 
